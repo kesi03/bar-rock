@@ -143,11 +143,12 @@
     <div class="keys" id="keys"></div>
     <div class="row">
       <button id="prev">◀ reg</button><button id="next">reg ▶</button>
+      <button id="bank-toggle">clean bank</button>
       <button id="demo" class="hot">play demo</button><button id="panic">panic</button>
     </div>
   </section>
   <section class="panel">
-    <h2>B · Registrations <small>pads 1-16 on the device</small></h2>
+    <h2>B · Registrations <small>32 in two banks · pads 1-16 select the bank's slots</small></h2>
     <div class="regs" id="regs"></div>
     <h2 style="margin-top:14px">String stops <small>toggle either 8' choir</small></h2>
     <div class="row" id="stops"></div>
@@ -194,6 +195,7 @@
   const $ = (id) => document.getElementById(id);
   const ctl = new Map();
   const reg = vibe.byId('registration');
+  const bank = vibe.byId('bank');
 
   function fmt(p, v) {
     if (p.steps > 1 && p.choices) {
@@ -237,6 +239,7 @@
   names.forEach((name, i) => {
     const b = document.createElement('button');
     b.textContent = String(i + 1).padStart(2,'0') + ' · ' + name;
+    if (i >= 16) b.classList.add('hot');
     b.onclick = () => vibe.set(reg.i, i);
     list.append(b);
   });
@@ -261,6 +264,7 @@
 
   $('prev').onclick = () => vibe.send(new Uint8Array([0x25]));
   $('next').onclick = () => vibe.send(new Uint8Array([0x24]));
+  $('bank-toggle').onclick = () => vibe.send(new Uint8Array([0x2C]));
   $('demo').onclick = () => vibe.send(new Uint8Array([0x26]));
   $('panic').onclick = () => vibe.send(new Uint8Array([0x23]));
   $('save').onclick = () => vibe.send(new Uint8Array([0x21]));
@@ -330,7 +334,12 @@
     }
     if (reg) {
       const k = Math.max(0, Math.min(names.length - 1, Math.round(values[reg.i])));
-      $('reg-pill').textContent = names[k];
+      $('reg-pill').textContent = (k >= 16 ? 'FX · ' : 'CLEAN · ') + names[k];
+    }
+    if (bank) {
+      const on = values[bank.i] > .5;
+      $('bank-toggle').textContent = on ? 'FX bank' : 'clean bank';
+      $('bank-toggle').classList.toggle('on', on);
     }
   });
 

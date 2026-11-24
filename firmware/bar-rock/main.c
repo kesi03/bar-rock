@@ -1,10 +1,12 @@
 /* BAR-ROCK -- a polyphonic harpsichord for VIBE FM.
  *
  * Sixteen Karplus-Strong voices, two slightly detuned 8' choirs, a two-pole
- * soundboard, algorithmic reverb, a bar-fly-derived colour rack (drive, Leslie,
- * modulation and echo) and sixteen registrations.  Keys and MIDI play
- * immediately; pads 1-16 select registrations and F3/PLAY starts a short Dido's
- * Lament excerpt.  No samples, no heap, no libc maths.
+ * soundboard, algorithmic reverb and a bar-fly-derived colour rack (drive,
+ * Leslie, modulation and echo).  Thirty-two registrations live in two banks:
+ * 1-16 are CLEAN (soundboard + reverb only), 17-32 add curated FX scenes.
+ * Pads 1-16 select a slot in the current bank; F2/F4 and encoder B browse all
+ * 32; the SOUND page has a BANK menu.  F3/PLAY starts a short Dido's Lament
+ * excerpt.  No samples, no heap, no libc maths.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -29,8 +31,11 @@ enum {
   P_PHASER_MIX, P_PHASER_RATE, P_CHORUS_MIX, P_CHORUS_RATE, P_FLANGER_MIX,
   P_TREM_DEPTH, P_PAN_DEPTH, P_RING_MIX, P_CRUSH_MIX,
   P_DELAY_TYPE, P_DELAY_MIX, P_DELAY_MS, P_DELAY_FB,
+  /* Append-only: the bank switch is new, old automation ids are untouched. */
+  P_BANK,
   P_COUNT
 };
+#define P_FX_LAST P_DELAY_FB
 
 static const char *reg_names[BR_REG_COUNT];
 static const char *const ON_OFF[] = { "OFF", "ON" };
@@ -74,7 +79,8 @@ static const vibe_param PARAMS[P_COUNT] = {
   PE("delay_type",   "Echo Type",    0, 2,    0,    "", 3, ECHO_TYPES),
   PV("delay_mix",    "Echo Mix",     0, 1,    0.00f, ""),
   PV("delay_ms",     "Echo Time",   80, 240, 280,   "ms"),
-  PV("delay_fb",     "Echo Feedback", 0, 1,   0.30f, "")
+  PV("delay_fb",     "Echo Feedback", 0, 1,   0.30f, ""),
+  PE("bank",         "Bank",         0, BR_BANK_COUNT - 1, 0, "", BR_BANK_COUNT, BR_BANK_NAMES)
 };
 #undef PV
 #undef PE
@@ -88,11 +94,12 @@ static const char *const GROUPS[P_COUNT] = {
   "FX · ROTARY", "FX · ROTARY", "FX · ROTARY", "FX · ROTARY", "FX · ROTARY",
   "FX · MOD", "FX · MOD", "FX · MOD", "FX · MOD",
   "FX · COLOUR", "FX · COLOUR", "FX · COLOUR", "FX · COLOUR", "FX · COLOUR",
-  "SPACE · ECHO", "SPACE · ECHO", "SPACE · ECHO", "SPACE · ECHO"
+  "SPACE · ECHO", "SPACE · ECHO", "SPACE · ECHO", "SPACE · ECHO",
+  "SOUND · VOICE"
 };
 
 static const vibe_card CARDS[] = {
-  { "VOICE",       6, "Sixteen registrations for two 8' plucked-string choirs." },
+  { "VOICE",       6, "Thirty-two registrations: sixteen CLEAN, sixteen with FX, for two 8' choirs." },
   { "CHOIRS",      6, "Detune, brightness and string damping of the Karplus-Strong paths." },
   { "SOUNDBOARD",  5, "Soundboard resonance, algorithmic reverb and the two 8' stops." },
   { "DRIVE",       4, "Solid / tube distortion, lo-fi crush and ring modulation." },
@@ -108,7 +115,7 @@ enum {
   UI_MOD, UI_COLOUR, UI_ECHO, UI_SYSTEM, UI_N
 };
 static const int PAGE_PARAM[UI_N][4] = {
-  { P_REG, P_OCTAVE, P_TRANSPOSE, P_VOLUME },
+  { P_REG, P_BANK, P_OCTAVE, P_TRANSPOSE },
   { P_DETUNE, P_BRIGHT, P_DAMPING, P_REVERB },
   { P_CHOIR_A, P_CHOIR_B, P_BODY, P_REG },
   { P_SAT_TYPE, P_DRIVE, P_CRUSH_MIX, P_RING_MIX },
@@ -127,16 +134,17 @@ static const char *const K_LABELS[6] = { "SOUND", "STRINGS", "STOPS", "FX", "HEL
 
 static const char *const HELP[] = {
   "KEYS / MIDI", "play the harpsichord (16 voices)",
-  "PADS 1-16", "select a registration",
+  "PADS 1-16", "select a slot in the current bank",
+  "BANK", "CLEAN = reverb + soundboard; FX = colour rack",
   "F1 / ENC A", "next page: drive, rotary, mod, colour, echo",
-  "F2 / ENC B", "next registration",
+  "F2 / ENC B", "next registration; crosses 16 to 17 and 32 to 1",
   "F3 / PLAY", "play or stop the Dido snippet",
   "F4", "previous registration",
   "F5 / HOME / K5", "this overview",
   "F6 / K6 / REC", "panic / all notes off",
   "K1-K4", "SOUND / STRINGS / STOPS / FX",
   "FX (K4)", "press again to step through the FX pages",
-  "KNOBS 1-4", "edit the four values shown",
+  "KNOBS 1-4", "edit the four values shown; SOUND has BANK",
   "REVERB", "algorithmic room on STRINGS / SYSTEM",
   "DEMO", "12 s of Purcell's Dido's Lament; PANIC stops it",
   "DATA + ENTER", "FOCUS: walk, press to edit",
@@ -167,7 +175,7 @@ static void apply_registration(int r);
 static volatile unsigned char q_type[QN], q_note[QN], q_vel[QN];
 static volatile unsigned int qw, qr;
 static volatile int last_note = -1, last_vel, note_hits;
-static int pad_flash[16];
+static int pad_flash[BR_BANK_REG_COUNT];
 
 /* DEMO command: 0 = idle, 1 = start, 2 = stop.  The sequencer itself runs in
  * the audio flow so it needs no timers, storage or host calls. */
@@ -218,7 +226,7 @@ static void toggle_demo(void)
 static void panic(void)
 {
   int i;
-  for (i = 0; i < 16; i++) pad_flash[i] = 0;
+  for (i = 0; i < BR_BANK_REG_COUNT; i++) pad_flash[i] = 0;
   stop_demo();
   post(3, 0, 0);
 }
@@ -233,15 +241,22 @@ static void store_state(void)
 static void load_state(void)
 {
   int32_t buf[P_COUNT];
-  int i, k;
+  int i, k, count, legacy;
   float v;
   int n = vibe_store_read("bar-rock-state", buf, (int)sizeof buf);
-  if (n != (int)sizeof buf) return;
-  for (i = 0; i < P_COUNT; i++) {
+
+  /* A state saved before the bank parameter had one fewer int.  Accept it and
+   * leave the new bank at CLEAN rather than throwing the player's setup away. */
+  if (n == (int)((P_COUNT - 1) * sizeof(int32_t))) legacy = 1;
+  else if (n == (int)sizeof buf) legacy = 0;
+  else return;
+  count = legacy ? P_COUNT - 1 : P_COUNT;
+
+  for (i = 0; i < count; i++) {
     v = (float)buf[i] * 0.001f;
     if (v < PARAMS[i].min || v > PARAMS[i].max) return;
   }
-  for (i = 0; i < P_COUNT; i++) {
+  for (i = 0; i < count; i++) {
     v = (float)buf[i] * 0.001f;
     if (PARAMS[i].steps > 1) {
       k = (int)(v + 0.5f);
@@ -253,7 +268,14 @@ static void load_state(void)
     aset(&g_params[i], scaled(v));
     vibe_param_set(i, v);
   }
+  if (legacy) {
+    ui_vals[P_BANK] = PARAMS[P_BANK].def;
+    aset(&g_params[P_BANK], scaled(PARAMS[P_BANK].def));
+    vibe_param_set(P_BANK, PARAMS[P_BANK].def);
+  }
   cur_reg = (int)(ui_vals[P_REG] + 0.5f);
+  if (cur_reg < 0) cur_reg = 0;
+  if (cur_reg >= BR_REG_COUNT) cur_reg = BR_REG_COUNT - 1;
 }
 
 static void set_param(int id, float v)
@@ -269,7 +291,11 @@ static void set_param(int id, float v)
   ui_vals[id] = v;
   aset(&g_params[id], scaled(v));
   vibe_param_set(id, v);
-  if (id == P_REG && !applying) apply_registration((int)(v + 0.5f));
+  if (!applying) {
+    if (id == P_REG) apply_registration((int)(v + 0.5f));
+    else if (id == P_BANK)
+      apply_registration(br_make_reg((int)(v + 0.5f), br_slot_of(cur_reg)));
+  }
 }
 
 static void reset_stops(void)
@@ -283,7 +309,7 @@ static void reset_stops(void)
   set_param(P_REVERB, PARAMS[P_REVERB].def);
   set_param(P_CHOIR_A, PARAMS[P_CHOIR_A].def);
   set_param(P_CHOIR_B, PARAMS[P_CHOIR_B].def);
-  for (i = P_SAT_TYPE; i < P_COUNT; i++)
+  for (i = P_SAT_TYPE; i <= P_FX_LAST; i++)
     set_param(i, PARAMS[i].def);
 }
 
@@ -295,6 +321,7 @@ static void apply_registration(int r)
   applying = 1;
   cur_reg = r;
   set_param(P_REG, (float)r);
+  set_param(P_BANK, (float)br_bank_of(r));
   reset_stops();
   reg = &BR_REGISTRATIONS[r];
   set_param(P_VOLUME, reg->volume);
@@ -316,6 +343,8 @@ static void apply_registration(int r)
   applying = 0;
 }
 
+/* F2/F4 and encoder B browse the full 32-registration list, crossing between
+ * CLEAN and FX at 16/17 and wrapping from 32 back to 1. */
 static void next_registration(int d)
 {
   int r = cur_reg + d;
@@ -348,6 +377,10 @@ static void build_status(void)
   char t[24];
   int n = 0;
   status[0] = 0;
+  n = append_txt(status, n, (int)sizeof status, BR_BANK_NAMES[br_bank_of(cur_reg)]);
+  n = append_txt(status, n, (int)sizeof status, " ");
+  n = append_txt(status, n, (int)sizeof status, vg_itoa(cur_reg + 1, t));
+  n = append_txt(status, n, (int)sizeof status, " | ");
   n = append_txt(status, n, (int)sizeof status, BR_REGISTRATIONS[cur_reg].name);
   n = append_txt(status, n, (int)sizeof status, " | voices ");
   n = append_txt(status, n, (int)sizeof status, vg_itoa(br_harpsi_voice_count(), t));
@@ -407,6 +440,7 @@ static void handle_editor(const uint8_t *b, int n)
   else if (b[0] == 0x27) stop_demo();
   else if (b[0] == 0x2A) set_param(P_ROTARY_ON, ui_vals[P_ROTARY_ON] > 0.5f ? 0.0f : 1.0f);
   else if (b[0] == 0x2B) set_param(P_SAT_TYPE, ui_vals[P_SAT_TYPE] + 1.0f > 2.0f ? 0.0f : ui_vals[P_SAT_TYPE] + 1.0f);
+  else if (b[0] == 0x2C) set_param(P_BANK, ui_vals[P_BANK] > 0.5f ? 0.0f : 1.0f);
   else if (b[0] == 0x28 && n >= 2) post(1, b[1], 108);
   else if (b[0] == 0x29 && n >= 2) post(2, b[1], 0);
   else if (b[0] >= 0x30 && b[0] < 0x30 + BR_REG_COUNT)
@@ -443,7 +477,8 @@ void vibe_on_event(const vibe_event *e)
   if (r == VF_PRESS) {
     if (fid == 900) toggle_demo();
     else if (fid == 901) panic();
-    else if (fid >= 910 && fid < 910 + BR_REG_COUNT) apply_registration(fid - 910);
+    else if (fid >= 910 && fid < 910 + BR_BANK_REG_COUNT)
+      apply_registration(br_make_reg(br_bank_of(cur_reg), fid - 910));
     return;
   }
   if (r == VF_CHANGED) {
@@ -472,17 +507,20 @@ void vibe_on_event(const vibe_event *e)
   }
   if (e->type == VIBE_EV_PAD) {
     p = (int)e->id;
-    if (p < 0 || p >= 16) return;
+    if (p < 0 || p >= BR_BANK_REG_COUNT) return;
     if (e->down) pad_flash[p] = 10;
-    if (p < BR_REG_COUNT && e->down) apply_registration(p);
+    if (e->down) apply_registration(br_make_reg(br_bank_of(cur_reg), p));
     return;
   }
   if (e->type == VIBE_EV_PARAM) {
     int i = (int)e->id;
     if (i >= 0 && i < P_COUNT) {
-      ui_vals[i] = e->value;
-      aset(&g_params[i], scaled(e->value));
-      if (i == P_REG && !applying) apply_registration((int)(e->value + 0.5f));
+      /* set_param clamps, publishes and applies registration/bank changes. */
+      if (!applying) set_param(i, e->value);
+      else {
+        ui_vals[i] = e->value;
+        aset(&g_params[i], scaled(e->value));
+      }
     }
     return;
   }
@@ -653,7 +691,7 @@ static int param_decimals(int id)
 
 void vibe_on_draw(uint16_t *fb)
 {
-  int i, id, playing;
+  int i, id, playing, bank, slot;
   char val[24], val2[24];
   float t, ml, mr;
   vg_begin(fb);
@@ -672,11 +710,15 @@ void vibe_on_draw(uint16_t *fb)
   vf_enable(1);
 
   vg_clear(C_BG);
+  bank = br_bank_of(cur_reg);
+  slot = br_slot_of(cur_reg);
   vg_rect(0, 0, 480, 44, C_PANEL);
   vg_rect(0, 43, 480, 2, C_ACC);
   draw_harpsi(452, 22, (float)draw_tick * 0.05f);
   vg_text("BAR-ROCK", 14, 7, VG_BIG, C_GOLD, VG_LEFT);
   vg_text(BR_REGISTRATIONS[cur_reg].name, 16, 29, VG_SMALL, C_CREAM, VG_LEFT);
+  vg_text(BR_BANK_NAMES[bank], 104, 29, VG_SMALL,
+          bank ? C_VIOLET : C_AVO, VG_LEFT);
   vg_text("NOTE", 180, 29, VG_SMALL, C_MUTED, VG_LEFT);
   vg_text(last_note >= 0 ? vg_itoa(last_note, val2) : "--", 220, 29,
           VG_SMALL, last_note >= 0 ? C_GOLD : C_MUTED, VG_LEFT);
@@ -714,17 +756,19 @@ void vibe_on_draw(uint16_t *fb)
     vf_value(id, 10, y, 460, 43, &ui_vals[id], PARAMS[id].min, PARAMS[id].max, step);
   }
 
-  /* Registration strip: two rows of eight, pads 1-16 / FOCUS ids 910-925. */
-  for (i = 0; i < BR_REG_COUNT; i++) {
+  /* Registration strip: the current bank's two rows of eight.  Pads 1-16 and
+   * FOCUS ids 910-925 address these slots; F2/F4 cross into the other bank. */
+  for (i = 0; i < BR_BANK_REG_COUNT; i++) {
     int x = 14 + (i % 8) * 57;
     int y = 246 + (i / 8) * 11;
     vg_round(x, y, 52, 10, 2,
-             i == cur_reg ? C_ACC : (pad_flash[i] > 0 ? C_VIOLET : C_PANEL2));
+             i == slot ? C_ACC : (pad_flash[i] > 0 ? C_VIOLET : C_PANEL2));
     vg_text(vg_itoa(i + 1, val), x + 26, y + 1, VG_SMALL,
-            i == cur_reg ? C_BG : C_CREAM, VG_CENTER);
+            i == slot ? C_BG : C_CREAM, VG_CENTER);
     vf_button(910 + i, x, y, 52, 10);
   }
-  vg_text("REG 1-16 / PADS 1-16", 470, 246, VG_SMALL, C_MUTED, VG_RIGHT);
+  vg_text(bank ? "FX BANK · PADS 1-16" : "CLEAN BANK · PADS 1-16",
+          470, 246, VG_SMALL, bank ? C_VIOLET : C_AVO, VG_RIGHT);
 
   /* Meters, voices, shortcuts. */
   ml = q1000(aget(&meter_l)); mr = q1000(aget(&meter_r));
@@ -760,15 +804,15 @@ void vibe_on_draw(uint16_t *fb)
   }
   vf_end(C_ACC);
 
-  for (i = 0; i < 16; i++) {
+  for (i = 0; i < BR_BANK_REG_COUNT; i++) {
     uint32_t c = C_PANEL2;
     float lvl = 0.0f;
     if (pad_flash[i] > 0) {
-      c = i < BR_REG_COUNT ? C_ACC : C_AVO;
+      c = bank ? C_VIOLET : C_ACC;
       lvl = (float)pad_flash[i] / 10.0f;
       pad_flash[i]--;
-    } else if (i == cur_reg) {
-      c = C_ACC; lvl = 0.35f;
+    } else if (i == slot) {
+      c = bank ? C_VIOLET : C_ACC; lvl = 0.35f;
     }
     vibe_led_pad(i, c, lvl);
   }
@@ -814,6 +858,7 @@ void vibe_on_init(float sample_rate)
   vibe_editor_tab_color("SPACE", C_BLUE);
 
   vibe_editor_control(P_REG, VIBE_CTL_MENU);
+  vibe_editor_control(P_BANK, VIBE_CTL_MENU);
   vibe_editor_control(P_OCTAVE, VIBE_CTL_MENU);
   vibe_editor_control(P_CHOIR_A, VIBE_CTL_TOGGLE);
   vibe_editor_control(P_CHOIR_B, VIBE_CTL_TOGGLE);
@@ -823,13 +868,14 @@ void vibe_on_init(float sample_rate)
   vibe_editor_control(P_ROTARY_SPEED, VIBE_CTL_MENU);
   vibe_editor_control(P_DELAY_TYPE, VIBE_CTL_MENU);
 
-  vibe_param_help(P_REG, "Sixteen stop combinations for the two 8' choirs; pads 1-16 and F2/F4 select them.");
+  vibe_param_help(P_REG, "32 registrations: 1-16 clean (reverb + soundboard), 17-32 with FX. F2/F4 browse; pads select the bank.");
+  vibe_param_help(P_BANK, "CLEAN = reverb + soundboard only; FX = the curated rack scene. Pads 1-16 follow this bank.");
   vibe_param_help(P_DETUNE, "Cents between choir A and choir B. A little detune gives the harpsichord its shimmer.");
   vibe_param_help(P_BRIGHT, "Karplus-Strong lowpass blend: higher is brighter and pluckier.");
   vibe_param_help(P_DAMPING, "String damping. Lower is a faster natural decay.");
   vibe_param_help(P_BODY, "Level of the two-pole soundboard resonance.");
   vibe_param_help(P_REVERB, "Fixed-memory Schroeder stereo reverb: four damped combs and two allpasses per channel, no samples.");
-  vibe_param_help(P_CHOIR_A, "The first 8' string choir. Pads 1-16 select registrations; DEMO plays both.");
+  vibe_param_help(P_CHOIR_A, "The first 8' string choir. Pads 1-16 select a slot in the current bank; DEMO plays both.");
   vibe_param_help(P_CHOIR_B, "The second 8' string choir, slightly detuned from the first.");
   vibe_param_help(P_SAT_TYPE, "Off, solid-state or asymmetric tube saturation before the colour rack.");
   vibe_param_help(P_DRIVE, "Input gain into the distortion; tube mode also adds a little asymmetry.");

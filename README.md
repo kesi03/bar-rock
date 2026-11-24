@@ -2,7 +2,7 @@
 
 ![BAR-ROCK](firmware/bar-rock/icon.png)
 
-A polyphonic harpsichord for [VIBE FM](https://github.com/Vibe-FM-SDK/vibe-fm-sdk): sixteen Karplus-Strong voices, two slightly detuned 8' choirs, a cheap two-pole soundboard, a fixed-memory Schroeder stereo reverb, sixteen registrations and a bar-fly-derived colour rack. Keys and MIDI play immediately; F3/PLAY starts a 12-second excerpt of the supplied Dido's Lament MIDI. No setup, no samples and no impulse responses. The DSP is fixed-voice and allocation-free — no malloc, no heap and no libc maths in the audio path.
+A polyphonic harpsichord for [VIBE FM](https://github.com/Vibe-FM-SDK/vibe-fm-sdk): sixteen Karplus-Strong voices, two slightly detuned 8' choirs, a cheap two-pole soundboard, a fixed-memory Schroeder stereo reverb, thirty-two registrations in two banks, and a bar-fly-derived colour rack. Keys and MIDI play immediately; F3/PLAY starts a 12-second excerpt of the supplied Dido's Lament MIDI. No setup, no samples and no impulse responses. The DSP is fixed-voice and allocation-free — no malloc, no heap and no libc maths in the audio path.
 
 ## Sound
 
@@ -12,13 +12,15 @@ A polyphonic harpsichord for [VIBE FM](https://github.com/Vibe-FM-SDK/vibe-fm-sd
 - **Soundboard:** two one-pole resonators add a little body without an IR.
 - **Reverb:** four damped combs plus two allpasses per channel, all in fixed arrays; a `Reverb` knob sets the wet amount and each registration carries its own room.
 - **Colour rack:** solid/tube distortion, a clean-room dual-rotor Leslie, four-stage phaser, two-tap stereo chorus, flanger, tremolo, auto-pan, ring modulation, lo-fi crush and ping-pong/tape echo. The rack is a straight bypass when all amounts are zero.
-- **Sixteen registrations:** `8 + 8`, `WIDE 8`, `CLOSE 8`, `BRIGHT 8`, `DARK 8`, `SOLO A`, `SOLO B`, `LONG 8`, `SOFT 8`, `PLUCK`, `AIR 8`, `DEEP 8`, `DRY 8`, `WET 8`, `SHIMMER`, `TUTTI`. Each carries a small FX scene as well as its stops; detailed FX settings stay where the player left them.
+- **32 registrations in two banks of 16:**
+  - **CLEAN (1–16):** `8 + 8`, `WIDE 8`, `CLOSE 8`, `BRIGHT 8`, `DARK 8`, `SOLO A`, `SOLO B`, `LONG 8`, `SOFT 8`, `PLUCK`, `AIR 8`, `DEEP 8`, `DRY 8`, `WET 8`, `SHIMMER`, `TUTTI`. Only voicing, soundboard and reverb — the effects rack is a true bypass.
+  - **FX (17–32):** the same voices with `FX 8+8` … `FX TUTTI`, each carrying a curated rack scene. Detailed FX rates and depths stay where the player left them. Pads 1–16 select a slot in the current bank; F2/F4 and encoder B browse all 32.
 - **On-device demo:** F3 / PLAY plays a 12-second Dido excerpt from a generated, fixed C header; it uses both 8' stops and stops again at the end (or press F3 / PANIC).
 - Raw MIDI note-on/off, VIBE keys, DAW notes and the custom Editor keyboard all feed the same voice allocator.
 
 ## FX rack
 
-The rack follows the harpsichord reverb. It is a straight bypass until a registration or the player turns something on, and every mix/depth is smoothed per block to avoid zipper noise and clicks.
+The rack follows the harpsichord reverb. Every CLEAN registration leaves it at zero (a straight bypass); FX-bank registrations switch on a small curated scene, and the player can still adjust every detail. All mixes/depths are smoothed per block to avoid zipper noise and clicks.
 
 - **DRIVE:** solid or asymmetric tube saturation, drive, lo-fi crush and ring modulation.
 - **ROTARY:** Leslie on/off, stop / slow / fast motors, Doppler depth and horn drive.
@@ -33,11 +35,12 @@ The Leslie is bar-fly's clean-room dual-rotor model: separate horn and bass moto
 | Control | Action |
 |---|---|
 | Keys / MIDI / DAW notes | Play the harpsichord (16 voices) |
-| Pads 1–16 | Select a registration |
+| Pads 1–16 | Select a slot in the current bank (CLEAN or FX) |
+| SOUND page / Bank knob | Switch between the CLEAN and FX banks |
 | F1 / Encoder A | Next page |
-| F2 / Encoder B | Next registration |
+| F2 / Encoder B | Next registration (crosses 16→17 and wraps 32→1) |
 | F3 / PLAY | Play or stop the 12-second Dido snippet |
-| F4 | Previous registration |
+| F4 | Previous registration (crosses banks) |
 | F5 / HOME / K5 | Show the controls overview |
 | F6 / K6 / REC / STOP | Panic (all notes off) |
 | K1–K4 | SOUND / STRINGS / STOPS / FX (press K4 again to step through FX pages) |
@@ -130,7 +133,7 @@ firmware/bar-rock/
   main.c                  parameters, keys/pads, display, editor bridge, state
   harpsi.c / harpsi.h     the Karplus-Strong engine (16 voices, 2 choirs, soundboard, reverb)
   fx.c / fx.h             fixed-memory colour rack (drive, Leslie, modulation, echo)
-  registrations.h         the sixteen factory registrations and their FX scenes
+  registrations.h         32 factory registrations: 16 CLEAN + 16 FX scenes
   firmware.json           manifest (id: bar-rock, protocol 7)
   editor/index.html       optional custom Editor page
   icon.png                960 x 540 menu tile (Baroque powdered-wig portrait)
@@ -140,6 +143,7 @@ firmware/bar-rock/
   wasmtest-demo.json      scripted Baroque demo render
   wasmtest-snippet.json   scripted DEMO-button regression
   wasmtest-fx.json        scripted full-rack / bypass / Leslie regression
+  wasmtest-bank.json      scripted CLEAN / FX bank-switch regression
   demo/                   Dido's Lament MIDI + notes
 patches/                  (none — registrations live in registrations.h)
 tools/make_icon.py        stdlib-only icon generator

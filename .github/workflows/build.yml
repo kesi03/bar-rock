@@ -68,6 +68,13 @@ jobs:
           node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
             firmware/bar-rock/wasmtest-fx.json sdk/build/bar-rock-fx
 
+      - name: Render bank switching
+        shell: bash
+        run: |
+          mkdir -p sdk/build/bar-rock-bank
+          node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
+            firmware/bar-rock/wasmtest-bank.json sdk/build/bar-rock-bank
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
