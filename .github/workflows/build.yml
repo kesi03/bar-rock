@@ -1,0 +1,77 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Zig 0.13.0
+        shell: bash
+        run: |
+          curl -fsSLo zig.tar.xz https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
+          tar -xf zig.tar.xz
+          echo "$GITHUB_WORKSPACE/zig-linux-x86_64-0.13.0" >> "$GITHUB_PATH"
+
+      - name: Fetch Vibe SDK
+        shell: bash
+        run: sh scripts/fetch-sdk.sh
+
+      - name: Regenerate demo data
+        shell: bash
+        run: python3 tools/make_demo.py
+
+      - name: Build firmware
+        shell: bash
+        run: sh sdk/tools/build.sh ../firmware/bar-rock
+
+      - name: Validate firmware
+        shell: bash
+        run: node sdk/tools/vibe-check.mjs sdk/build/bar-rock.wasm --manifest firmware/bar-rock/firmware.json --seconds 5
+
+      - name: Render scripted audio and display
+        shell: bash
+        run: |
+          mkdir -p sdk/build/bar-rock-test
+          node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
+            firmware/bar-rock/wasmtest.json sdk/build/bar-rock-test
+
+      - name: Render Baroque demo
+        shell: bash
+        run: |
+          mkdir -p sdk/build/bar-rock-demo
+          node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
+            firmware/bar-rock/wasmtest-demo.json sdk/build/bar-rock-demo
+
+      - name: Render on-device demo button
+        shell: bash
+        run: |
+          mkdir -p sdk/build/bar-rock-snippet
+          node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
+            firmware/bar-rock/wasmtest-snippet.json sdk/build/bar-rock-snippet
+
+      - name: Render effects rack
+        shell: bash
+        run: |
+          mkdir -p sdk/build/bar-rock-fx
+          node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
+            firmware/bar-rock/wasmtest-fx.json sdk/build/bar-rock-fx
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bar-rock
+          path: |
+            sdk/build/bar-rock.zip
+            sdk/build/bar-rock.wasm

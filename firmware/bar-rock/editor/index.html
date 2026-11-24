@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BAR-ROCK · Vibe FM harpsichord</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --night:#100C14; --panel:#1D1428; --panel2:#2A1B39; --line:#4A3560;
+    --orange:#FF9F1C; --gold:#F2C14E; --cream:#FFF0D0; --avo:#8FA44B;
+    --violet:#B987FF; --blue:#46B6FF;
+    --fg:#FFF0D0; --muted:#A08DB5; --dim:#6F5C80;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:18px; background:var(--night); color:var(--fg);
+         font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
+         background-image:repeating-linear-gradient(0deg,transparent 0 39px,rgba(242,193,78,.025) 39px 40px); }
+  .hero { display:flex; align-items:center; gap:18px; padding:16px 18px; border:2px solid var(--orange);
+          border-radius:14px; background:linear-gradient(115deg,#1D1428 0%,#3A2050 58%,#160F1E 100%);
+          position:relative; overflow:hidden; }
+  .hero:after { content:""; position:absolute; right:-45px; top:-90px; width:260px; height:260px;
+                border-radius:50%; border:18px solid rgba(242,193,78,.10); }
+  .harp { width:112px; height:86px; flex:none; filter:drop-shadow(0 3px 0 rgba(0,0,0,.35)); }
+  .brand { flex:1; min-width:0; }
+  .kicker { font-size:10px; letter-spacing:.34em; color:var(--gold); text-transform:uppercase; }
+  h1 { margin:2px 0 0; font-size:clamp(30px,6vw,54px); line-height:.95; letter-spacing:.02em;
+       color:var(--orange); text-shadow:2px 2px 0 #6B2F0C; }
+  .brand p { margin:6px 0 0; font-size:11px; letter-spacing:.18em; color:var(--cream); text-transform:uppercase; }
+  .badge { flex:none; border:2px dashed var(--gold); border-radius:50%; width:92px; height:92px;
+           display:grid; place-content:center; text-align:center; color:var(--gold);
+           font-size:10px; font-weight:800; letter-spacing:.12em; line-height:1.3; transform:rotate(-8deg); }
+  .statusbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:10px 0 16px;
+               padding:8px 12px; border-radius:8px; background:var(--panel); border:1px solid var(--line); }
+  #status { flex:1; min-width:180px; color:var(--gold); font-variant-numeric:tabular-nums; font-size:12px; }
+  .pill { padding:3px 9px; border-radius:999px; background:rgba(143,164,75,.18); color:var(--avo);
+          font-size:10px; letter-spacing:.14em; text-transform:uppercase; border:1px solid rgba(143,164,75,.35); }
+  .pill.hot { color:var(--orange); border-color:rgba(255,159,28,.45); background:rgba(255,159,28,.12); }
+  h2 { margin:0 0 10px; font-size:13px; letter-spacing:.2em; text-transform:uppercase; color:var(--orange);
+       display:flex; align-items:baseline; gap:10px; }
+  h2 small { font-size:10px; letter-spacing:.1em; color:var(--muted); text-transform:none; }
+  .panel { border:1px solid var(--line); border-radius:12px; padding:14px; margin:0 0 14px;
+           background:linear-gradient(180deg,var(--panel2),var(--panel)); box-shadow:0 6px 18px rgba(0,0,0,.25); }
+  .two { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:8px 16px; }
+  .ctl { display:grid; grid-template-columns:minmax(96px,1fr) minmax(80px,1.1fr) 78px;
+         align-items:center; gap:8px; }
+  .ctl label { font-size:11px; letter-spacing:.06em; color:var(--muted); }
+  .ctl output { text-align:right; color:var(--cream); font-size:11px; font-variant-numeric:tabular-nums; }
+  input[type=range] { width:100%; accent-color:var(--orange); height:18px; }
+  select, button { font:inherit; padding:6px 9px; border-radius:6px;
+    border:1px solid var(--line); background:var(--night); color:var(--fg); }
+  select { width:100%; }
+  button { cursor:pointer; border-color:var(--orange); color:var(--orange); font-weight:700;
+           font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+  button:hover { background:var(--orange); color:var(--night); }
+  button.hot { border-color:var(--gold); color:var(--gold); }
+  button.hot:hover { background:var(--gold); color:var(--night); }
+  button.on { background:var(--avo); border-color:var(--avo); color:var(--night); }
+  button:active { transform:translateY(1px); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  .regs { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .regs button { padding:12px 5px; font-size:10px; letter-spacing:.04em; }
+  .keys { position:relative; display:flex; height:94px; border:1px solid var(--line);
+          border-radius:8px; overflow:hidden; background:#0C070F;
+          box-shadow:inset 0 8px 0 #24182F, inset 0 -5px 0 #2A1B39, 0 5px 14px rgba(0,0,0,.35); }
+  .keys::before { content:""; position:absolute; left:0; right:0; top:0; height:8px; z-index:4;
+                  pointer-events:none; background:linear-gradient(#3C2A4A,#100C14); }
+  .keys button { border:0; border-radius:0; padding:0; min-width:0; touch-action:none;
+                 font-size:9px; letter-spacing:0; text-transform:none; user-select:none; }
+  .keys button.white { flex:1 1 0; height:100%; z-index:1; color:#5A4026;
+    background:linear-gradient(180deg,#FBF3DF 0%,#F3E5C8 70%,#D8C39B 100%);
+    border-right:1px solid #8B7557; border-bottom:3px solid #BDA987; }
+  .keys button.white:last-of-type { border-right:0; }
+  .keys button.white:active { background:linear-gradient(180deg,var(--orange),#D16912); color:#100C14; }
+  .keys button.black { position:absolute; top:0; height:61%; z-index:3; flex:none;
+    transform:translateX(-50%); color:#9C7D60;
+    background:linear-gradient(90deg,#050403,#292019 18%,#15100D 68%,#050403);
+    border:1px solid #000; border-top:0; border-radius:0 0 5px 5px;
+    box-shadow:0 4px 0 #050302, 0 6px 7px rgba(0,0,0,.55), inset 0 -7px 6px rgba(255,255,255,.06); }
+  .keys button.black:active { transform:translateX(-50%) translateY(2px);
+    background:linear-gradient(180deg,var(--orange),#8C3B08); color:#FFF0D0; }
+  .display { width:480px; max-width:100%; image-rendering:pixelated; border:1px solid var(--line); border-radius:6px; }
+  .stripes { height:8px; border-radius:4px; margin:16px 0;
+    background:linear-gradient(90deg,var(--orange) 0 33%,var(--gold) 33% 66%,var(--avo) 66% 100%); }
+  footer { padding:12px 4px 24px; color:var(--dim); font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <svg class="harp" viewBox="0 0 112 86" aria-label="BAR-ROCK powdered wig logo">
+    <circle cx="56" cy="36" r="30" fill="#F2C14E" opacity=".16"/>
+    <circle cx="56" cy="36" r="22" fill="#F2C14E" opacity=".35"/>
+    <ellipse cx="56" cy="36" rx="27" ry="25" fill="#A4A8AA"/>
+    <ellipse cx="56" cy="34" rx="24" ry="22" fill="#EAE8DE"/>
+    <ellipse cx="56" cy="40" rx="11" ry="14" fill="#F2D4B4"/>
+    <circle cx="52" cy="38" r="1.2" fill="#26182C"/>
+    <circle cx="60" cy="38" r="1.2" fill="#26182C"/>
+    <path d="M53 45 Q56 47 59 45" stroke="#5E2040" stroke-width="1" fill="none"/>
+    <g fill="#EAE8DE" stroke="#A4A8AA" stroke-width="1">
+      <ellipse cx="35" cy="28" rx="7" ry="10"/>
+      <ellipse cx="34" cy="41" rx="7" ry="10"/>
+      <ellipse cx="38" cy="53" rx="7" ry="6"/>
+      <ellipse cx="77" cy="28" rx="7" ry="10"/>
+      <ellipse cx="78" cy="41" rx="7" ry="10"/>
+      <ellipse cx="74" cy="53" rx="7" ry="6"/>
+      <ellipse cx="45" cy="17" rx="9" ry="6"/>
+      <ellipse cx="56" cy="14" rx="9" ry="6"/>
+      <ellipse cx="67" cy="17" rx="9" ry="6"/>
+    </g>
+    <ellipse cx="80" cy="32" rx="6" ry="3" fill="#5E2040"/>
+    <ellipse cx="87" cy="34" rx="6" ry="3" fill="#5E2040"/>
+    <circle cx="83" cy="33" r="2.6" fill="#FF9F1C"/>
+    <path d="M86 38 Q94 46 90 56" stroke="#A4A8AA" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <rect x="16" y="62" width="80" height="15" rx="4" fill="#B987FF" stroke="#FF9F1C" stroke-width="2"/>
+    <rect x="20" y="68" width="72" height="7" fill="#FFF0D0"/>
+    <path d="M28 68 V75 M36 68 V75 M44 68 V75 M52 68 V75 M60 68 V75 M68 68 V75 M76 68 V75 M84 68 V75"
+          stroke="#3A2050" stroke-width="1.5"/>
+    <path d="M24 68 V72 M40 68 V72 M48 68 V72 M64 68 V72 M72 68 V72 M80 68 V72"
+          stroke="#100C14" stroke-width="2"/>
+  </svg>
+  <div class="brand">
+    <div class="kicker">Vibe FM · polyphonic harpsichord</div>
+    <h1>BAR-ROCK</h1>
+    <p>Karplus-Strong · 2 × 8' · soundboard · drive · Leslie · echo</p>
+  </div>
+  <div class="badge">16 VOICES<br>+ 2 × 8'</div>
+</header>
+
+<div class="statusbar">
+  <span id="status">plucking the strings…</span>
+  <span class="pill hot" id="reg-pill">8 + 8</span>
+  <span class="pill">no samples</span>
+  <span class="pill">algorithmic reverb</span>
+  <span class="pill" id="fx-pill">clean</span>
+  <span class="pill hot">Dido snippet</span>
+</div>
+
+<div class="two">
+  <section class="panel">
+    <h2>A · Keys <small>play C3 – B5</small></h2>
+    <div class="keys" id="keys"></div>
+    <div class="row">
+      <button id="prev">◀ reg</button><button id="next">reg ▶</button>
+      <button id="demo" class="hot">play demo</button><button id="panic">panic</button>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>B · Registrations <small>pads 1-16 on the device</small></h2>
+    <div class="regs" id="regs"></div>
+    <h2 style="margin-top:14px">String stops <small>toggle either 8' choir</small></h2>
+    <div class="row" id="stops"></div>
+  </section>
+</div>
+
+<div class="stripes"></div>
+
+<div class="two">
+  <section class="panel">
+    <h2>C · Strings &amp; soundboard</h2>
+    <div class="grid" id="grp-STRINGS"></div>
+  </section>
+  <section class="panel">
+    <h2>D · Device display <small>the firmware stays playable without this page</small></h2>
+    <canvas class="display" id="display" width="480" height="320"></canvas>
+    <div class="row"><button id="save">save state</button><button id="status-btn">refresh status</button></div>
+  </section>
+</div>
+
+<div class="two">
+  <section class="panel">
+    <h2>E · Voice &amp; output</h2>
+    <div class="grid" id="grp-SOUND"></div>
+  </section>
+  <section class="panel">
+    <h2>F · Colour rack <small>bar-fly-derived, allocation-free</small></h2>
+    <div class="row" id="fx-toggles"></div>
+    <div class="grid" id="grp-FX"></div>
+  </section>
+</div>
+
+<section class="panel">
+  <h2>G · Echo &amp; space</h2>
+  <div class="grid" id="grp-SPACE"></div>
+</section>
+
+<footer>Built with the VIBE FM SDK · the firmware stays playable without this page</footer>
+
+<script src="vibe-editor.js"></script>
+<script>
+(async () => {
+  await vibe.ready;
+  const $ = (id) => document.getElementById(id);
+  const ctl = new Map();
+  const reg = vibe.byId('registration');
+
+  function fmt(p, v) {
+    if (p.steps > 1 && p.choices) {
+      const k = Math.round((v - p.min) / ((p.max - p.min) / (p.steps - 1)));
+      return p.choices[Math.max(0, Math.min(p.choices.length - 1, k))] || '';
+    }
+    if (p.unit === 'ct') return (v > 0 ? '+' : '') + v.toFixed(0) + ' ct';
+    if (p.unit === 'st') return (v > 0 ? '+' : '') + v.toFixed(0) + ' st';
+    return v.toFixed(2);
+  }
+
+  function addControl(host, p) {
+    if (!p) return;
+    const row = document.createElement('div'); row.className = 'ctl';
+    const label = document.createElement('label'); label.textContent = p.name;
+    const out = document.createElement('output');
+    let input;
+    if (p.steps > 1 && p.choices && p.choices.length) {
+      input = document.createElement('select');
+      p.choices.forEach((c, k) => input.add(new Option(c, String(k))));
+      input.onchange = () => vibe.set(p.i, p.min + (+input.value) * (p.max - p.min) / (p.steps - 1));
+    } else {
+      input = document.createElement('input'); input.type = 'range';
+      input.min = '0'; input.max = '1000'; input.step = '1';
+      input.oninput = () => vibe.set(p.i, p.min + (+input.value) / 1000 * (p.max - p.min));
+    }
+    row.append(label, input, out);
+    $(host).append(row);
+    ctl.set(p.id, { p, input, out });
+  }
+
+  /* Group by the tab part of "TAB · CARD" (not by the first letter). */
+  const TABS = new Set(['SOUND', 'STRINGS', 'FX', 'SPACE']);
+  for (const p of vibe.params) {
+    const tab = String(p.group || 'SOUND').split('·')[0].trim().toUpperCase();
+    addControl('grp-' + (TABS.has(tab) ? tab : 'SOUND'), p);
+  }
+
+  const names = (reg && reg.choices) ? reg.choices : ['8 + 8'];
+  const list = $('regs');
+  names.forEach((name, i) => {
+    const b = document.createElement('button');
+    b.textContent = String(i + 1).padStart(2,'0') + ' · ' + name;
+    b.onclick = () => vibe.set(reg.i, i);
+    list.append(b);
+  });
+
+  for (const id of ['choir_a', 'choir_b']) {
+    const p = vibe.byId(id);
+    if (!p) continue;
+    const b = document.createElement('button');
+    b.onclick = () => vibe.set(p.i, vibe.values[p.i] > .5 ? 0 : 1);
+    $('stops').append(b);
+    ctl.set('button-' + id, { p, button: b });
+  }
+
+  for (const [key, cmd, label] of [['rotary_on', 0x2A, 'leslie'], ['sat_type', 0x2B, 'distortion']]) {
+    const p = vibe.byId(key);
+    if (!p) continue;
+    const b = document.createElement('button');
+    b.onclick = () => vibe.send(new Uint8Array([cmd]));
+    $('fx-toggles').append(b);
+    ctl.set('button-' + key, { p, button: b, label });
+  }
+
+  $('prev').onclick = () => vibe.send(new Uint8Array([0x25]));
+  $('next').onclick = () => vibe.send(new Uint8Array([0x24]));
+  $('demo').onclick = () => vibe.send(new Uint8Array([0x26]));
+  $('panic').onclick = () => vibe.send(new Uint8Array([0x23]));
+  $('save').onclick = () => vibe.send(new Uint8Array([0x21]));
+  $('status-btn').onclick = () => vibe.send(new Uint8Array([0x20]));
+
+  const LOW = 48, HIGH = 83;
+  const WHITE_PCS = [0,2,4,5,7,9,11];
+  const BLACK_PCS = [1,3,6,8,10];
+  const whiteTotal = Array.from({length:HIGH-LOW+1},(_,i)=>LOW+i)
+    .filter(n => WHITE_PCS.includes(n % 12)).length;
+  const whitePitch = 100 / whiteTotal;
+  let whitesBefore = 0;
+  for (let n = LOW; n <= HIGH; n++) {
+    const pc = n % 12;
+    const black = BLACK_PCS.includes(pc);
+    const b = document.createElement('button');
+    b.className = black ? 'black' : 'white';
+    b.title = 'MIDI ' + n;
+    b.setAttribute('aria-label', b.title);
+    if (black) {
+      b.style.left = (whitesBefore * whitePitch).toFixed(4) + '%';
+      b.style.width = (whitePitch * 0.62).toFixed(4) + '%';
+    } else {
+      if (pc === 0) b.textContent = 'C' + (Math.floor(n / 12) - 1);
+      whitesBefore++;
+    }
+    b.onpointerdown = () => vibe.note(n, .82);
+    b.onpointerup = b.onpointerleave = () => vibe.note(n, 0);
+    $('keys').append(b);
+  }
+
+  const disp = $('display');
+  vibe.onFrame((fb) => vibe.paint(disp, fb));
+
+  vibe.onValues((values) => {
+    for (const { p, input, out } of ctl.values()) {
+      if (!input || !out) continue;
+      const v = values[p.i];
+      if (v === undefined) continue;
+      const norm = (v - p.min) / (p.max - p.min || 1);
+      if (p.steps > 1 && p.choices) {
+        if (document.activeElement !== input) input.value = String(Math.round(norm * (p.steps - 1)));
+      } else if (document.activeElement !== input) {
+        input.value = String(Math.round(norm * 1000));
+      }
+      out.textContent = fmt(p, v);
+    }
+    for (const id of ['choir_a', 'choir_b']) {
+      const entry = ctl.get('button-' + id);
+      if (!entry || !entry.button) continue;
+      const on = values[entry.p.i] > .5;
+      entry.button.textContent = entry.p.name.replace("8' ", '') + (on ? ' · on' : ' · off');
+      entry.button.classList.toggle('on', on);
+    }
+    for (const key of ['rotary_on', 'sat_type']) {
+      const entry = ctl.get('button-' + key);
+      if (!entry || !entry.button) continue;
+      const v = values[entry.p.i] ?? 0;
+      if (key === 'rotary_on') {
+        const on = v > .5;
+        entry.button.textContent = entry.label + (on ? ' · on' : ' · off');
+        entry.button.classList.toggle('on', on);
+      } else {
+        entry.button.textContent = entry.label + ' · ' + fmt(entry.p, v);
+        entry.button.classList.toggle('on', v > .5);
+      }
+    }
+    if (reg) {
+      const k = Math.max(0, Math.min(names.length - 1, Math.round(values[reg.i])));
+      $('reg-pill').textContent = names[k];
+    }
+  });
+
+  vibe.onData((b) => {
+    if (!b || !b.length) return;
+    const text = new TextDecoder().decode(b);
+    $('status').textContent = text;
+    const playing = /\|\s*DEMO\b/.test(text);
+    $('demo').textContent = playing ? 'stop demo' : 'play demo';
+    $('demo').classList.toggle('on', playing);
+    const les = text.match(/\|\s*LES\s+(\w+)/);
+    const drive = text.match(/\|\s*(SOLID|TUBE)\s+(\d+)%/);
+    $('fx-pill').textContent = les ? 'leslie ' + les[1].toLowerCase()
+      : (drive ? drive[1].toLowerCase() + ' ' + drive[2] + '%' : 'clean');
+    $('fx-pill').classList.toggle('hot', !!(les || drive));
+  });
+
+  vibe.send(new Uint8Array([0x20]));
+  setInterval(() => vibe.send(new Uint8Array([0x20])), 3000);
+})();
+</script>
+</body>
+</html>

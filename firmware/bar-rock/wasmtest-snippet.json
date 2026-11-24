@@ -1,0 +1,16 @@
+{
+  "seconds": 20.0,
+  "float": true,
+  "steps": [
+    {"t": 0.00, "shot": "01-snippet-idle"},
+    {"t": 0.10, "ev": [3, 2, 1, 0]},
+    {"t": 1.00, "shot": "02-snippet-playing"},
+    {"t": 5.00, "shot": "03-snippet-middle"},
+    {"t": 5.20, "ev": [3, 2, 1, 0]},
+    {"t": 5.50, "shot": "04-snippet-stopped"},
+    {"t": 6.00, "ev": [3, 2, 1, 0]},
+    {"t": 7.00, "shot": "05-snippet-restart"},
+    {"t": 13.00, "shot": "06-snippet-still-playing"},
+    {"t": 18.50, "shot": "07-snippet-finished"}
+  ]
+}
