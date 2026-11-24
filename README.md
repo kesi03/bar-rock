@@ -15,7 +15,7 @@ A polyphonic harpsichord for [VIBE FM](https://github.com/Vibe-FM-SDK/vibe-fm-sd
 - **32 registrations in two banks of 16:**
   - **CLEAN (1–16):** `8 + 8`, `WIDE 8`, `CLOSE 8`, `BRIGHT 8`, `DARK 8`, `SOLO A`, `SOLO B`, `LONG 8`, `SOFT 8`, `PLUCK`, `AIR 8`, `DEEP 8`, `DRY 8`, `WET 8`, `SHIMMER`, `TUTTI`. Only voicing, soundboard and reverb — the effects rack is a true bypass.
   - **FX (17–32):** the same voices with `FX 8+8` … `FX TUTTI`, each carrying a curated rack scene. Detailed FX rates and depths stay where the player left them. Pads 1–16 select a slot in the current bank; F2/F4 and encoder B browse all 32.
-- **On-device demo:** F3 / PLAY plays a 12-second Dido excerpt from a generated, fixed C header; it uses both 8' stops and stops again at the end (or press F3 / PANIC).
+- **On-device demo:** F3 / PLAY plays a 12-second Dido excerpt from a generated, fixed C header. It uses both 8' stops and **loops by default** for hands-free FX testing; turn `Demo Loop` off on the SYSTEM page (or with the editor's `loop` button) for a single pass. F3 again or PANIC always stops it.
 - Raw MIDI note-on/off, VIBE keys, DAW notes and the custom Editor keyboard all feed the same voice allocator.
 
 ## FX rack
@@ -40,6 +40,7 @@ The Leslie is bar-fly's clean-room dual-rotor model: separate horn and bass moto
 | F1 / Encoder A | Next page |
 | F2 / Encoder B | Next registration (crosses 16→17 and wraps 32→1) |
 | F3 / PLAY | Play or stop the 12-second Dido snippet |
+| SYSTEM knob 2 / editor `loop` button | Demo Loop on (default) repeats the snippet; off plays it once |
 | F4 | Previous registration (crosses banks) |
 | F5 / HOME / K5 | Show the controls overview |
 | F6 / K6 / REC / STOP | Panic (all notes off) |
@@ -144,6 +145,7 @@ firmware/bar-rock/
   wasmtest-snippet.json   scripted DEMO-button regression
   wasmtest-fx.json        scripted full-rack / bypass / Leslie regression
   wasmtest-bank.json      scripted CLEAN / FX bank-switch regression
+  wasmtest-loop.json      scripted looping-demo wrap regression
   demo/                   Dido's Lament MIDI + notes
 patches/                  (none — registrations live in registrations.h)
 tools/make_icon.py        stdlib-only icon generator

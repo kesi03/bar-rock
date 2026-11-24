@@ -75,6 +75,13 @@ jobs:
           node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
             firmware/bar-rock/wasmtest-bank.json sdk/build/bar-rock-bank
 
+      - name: Render looping demo
+        shell: bash
+        run: |
+          mkdir -p sdk/build/bar-rock-loop
+          node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
+            firmware/bar-rock/wasmtest-loop.json sdk/build/bar-rock-loop
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

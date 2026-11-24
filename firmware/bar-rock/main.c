@@ -6,7 +6,8 @@
  * 1-16 are CLEAN (soundboard + reverb only), 17-32 add curated FX scenes.
  * Pads 1-16 select a slot in the current bank; F2/F4 and encoder B browse all
  * 32; the SOUND page has a BANK menu.  F3/PLAY starts a short Dido's Lament
- * excerpt.  No samples, no heap, no libc maths.
+ * excerpt, which can loop for hands-free FX testing.  No samples, no heap,
+ * no libc maths.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,8 +32,9 @@ enum {
   P_PHASER_MIX, P_PHASER_RATE, P_CHORUS_MIX, P_CHORUS_RATE, P_FLANGER_MIX,
   P_TREM_DEPTH, P_PAN_DEPTH, P_RING_MIX, P_CRUSH_MIX,
   P_DELAY_TYPE, P_DELAY_MIX, P_DELAY_MS, P_DELAY_FB,
-  /* Append-only: the bank switch is new, old automation ids are untouched. */
+  /* Append-only: new controls keep old automation ids untouched. */
   P_BANK,
+  P_DEMO_LOOP,
   P_COUNT
 };
 #define P_FX_LAST P_DELAY_FB
@@ -80,7 +82,8 @@ static const vibe_param PARAMS[P_COUNT] = {
   PV("delay_mix",    "Echo Mix",     0, 1,    0.00f, ""),
   PV("delay_ms",     "Echo Time",   80, 240, 280,   "ms"),
   PV("delay_fb",     "Echo Feedback", 0, 1,   0.30f, ""),
-  PE("bank",         "Bank",         0, BR_BANK_COUNT - 1, 0, "", BR_BANK_COUNT, BR_BANK_NAMES)
+  PE("bank",         "Bank",         0, BR_BANK_COUNT - 1, 0, "", BR_BANK_COUNT, BR_BANK_NAMES),
+  PE("demo_loop",    "Demo Loop",    0, 1,    1,    "", 2, ON_OFF)
 };
 #undef PV
 #undef PE
@@ -95,7 +98,7 @@ static const char *const GROUPS[P_COUNT] = {
   "FX · MOD", "FX · MOD", "FX · MOD", "FX · MOD",
   "FX · COLOUR", "FX · COLOUR", "FX · COLOUR", "FX · COLOUR", "FX · COLOUR",
   "SPACE · ECHO", "SPACE · ECHO", "SPACE · ECHO", "SPACE · ECHO",
-  "SOUND · VOICE"
+  "SOUND · VOICE", "SOUND · VOICE"
 };
 
 static const vibe_card CARDS[] = {
@@ -123,7 +126,7 @@ static const int PAGE_PARAM[UI_N][4] = {
   { P_PHASER_MIX, P_PHASER_RATE, P_CHORUS_MIX, P_CHORUS_RATE },
   { P_FLANGER_MIX, P_TREM_DEPTH, P_PAN_DEPTH, P_ROTARY_BALANCE },
   { P_DELAY_TYPE, P_DELAY_MIX, P_DELAY_MS, P_DELAY_FB },
-  { P_VOLUME, P_REVERB, P_OCTAVE, P_TRANSPOSE }
+  { P_VOLUME, P_DEMO_LOOP, P_OCTAVE, P_TRANSPOSE }
 };
 static const char *const PAGE_NAME[UI_N] = {
   "SOUND", "STRINGS", "STOPS", "DRIVE", "ROTARY",
@@ -147,6 +150,7 @@ static const char *const HELP[] = {
   "KNOBS 1-4", "edit the four values shown; SOUND has BANK",
   "REVERB", "algorithmic room on STRINGS / SYSTEM",
   "DEMO", "12 s of Purcell's Dido's Lament; PANIC stops it",
+  "DEMO LOOP", "SYSTEM knob 2 / editor button: repeat the excerpt while playing",
   "DATA + ENTER", "FOCUS: walk, press to edit",
   "RETURN", "close overview, back to SOUND",
   "FOCUS", "hold ENTER; DATA walks values and reg tiles"
@@ -245,12 +249,13 @@ static void load_state(void)
   float v;
   int n = vibe_store_read("bar-rock-state", buf, (int)sizeof buf);
 
-  /* A state saved before the bank parameter had one fewer int.  Accept it and
-   * leave the new bank at CLEAN rather than throwing the player's setup away. */
-  if (n == (int)((P_COUNT - 1) * sizeof(int32_t))) legacy = 1;
+  /* Older states had no bank and/or no demo-loop control.  Keep the player's
+   * setup and default just the controls that did not exist when it was saved. */
+  if (n == (int)((P_COUNT - 2) * sizeof(int32_t))) legacy = 2;
+  else if (n == (int)((P_COUNT - 1) * sizeof(int32_t))) legacy = 1;
   else if (n == (int)sizeof buf) legacy = 0;
   else return;
-  count = legacy ? P_COUNT - 1 : P_COUNT;
+  count = P_COUNT - legacy;
 
   for (i = 0; i < count; i++) {
     v = (float)buf[i] * 0.001f;
@@ -268,7 +273,12 @@ static void load_state(void)
     aset(&g_params[i], scaled(v));
     vibe_param_set(i, v);
   }
-  if (legacy) {
+  if (legacy >= 1) {
+    ui_vals[P_DEMO_LOOP] = PARAMS[P_DEMO_LOOP].def;
+    aset(&g_params[P_DEMO_LOOP], scaled(PARAMS[P_DEMO_LOOP].def));
+    vibe_param_set(P_DEMO_LOOP, PARAMS[P_DEMO_LOOP].def);
+  }
+  if (legacy >= 2) {
     ui_vals[P_BANK] = PARAMS[P_BANK].def;
     aset(&g_params[P_BANK], scaled(PARAMS[P_BANK].def));
     vibe_param_set(P_BANK, PARAMS[P_BANK].def);
@@ -420,8 +430,11 @@ static void build_status(void)
   n = append_txt(status, n, (int)sizeof status, " (");
   n = append_txt(status, n, (int)sizeof status, vg_itoa(note_hits, t));
   n = append_txt(status, n, (int)sizeof status, ")");
-  if (__atomic_load_n(&demo_playing, __ATOMIC_ACQUIRE))
+  if (__atomic_load_n(&demo_playing, __ATOMIC_ACQUIRE)) {
     n = append_txt(status, n, (int)sizeof status, " | DEMO");
+    if (aget(&g_params[P_DEMO_LOOP]) > 500)
+      n = append_txt(status, n, (int)sizeof status, " LOOP");
+  }
   status_len = n;
   status_pending = 1;
 }
@@ -441,6 +454,7 @@ static void handle_editor(const uint8_t *b, int n)
   else if (b[0] == 0x2A) set_param(P_ROTARY_ON, ui_vals[P_ROTARY_ON] > 0.5f ? 0.0f : 1.0f);
   else if (b[0] == 0x2B) set_param(P_SAT_TYPE, ui_vals[P_SAT_TYPE] + 1.0f > 2.0f ? 0.0f : ui_vals[P_SAT_TYPE] + 1.0f);
   else if (b[0] == 0x2C) set_param(P_BANK, ui_vals[P_BANK] > 0.5f ? 0.0f : 1.0f);
+  else if (b[0] == 0x2D) set_param(P_DEMO_LOOP, ui_vals[P_DEMO_LOOP] > 0.5f ? 0.0f : 1.0f);
   else if (b[0] == 0x28 && n >= 2) post(1, b[1], 108);
   else if (b[0] == 0x29 && n >= 2) post(2, b[1], 0);
   else if (b[0] >= 0x30 && b[0] < 0x30 + BR_REG_COUNT)
@@ -580,7 +594,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
 {
   int i, total = frames, n;
   unsigned int t, end;
-  int type, nte, vel, cmd, playing;
+  int type, nte, vel, cmd, playing, demo_loop;
   float peak_l = 0.0f, peak_r = 0.0f;
 
   (void)in;
@@ -600,6 +614,7 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
 
   fill_controls();
   fill_fx();
+  demo_loop = aget(&g_params[P_DEMO_LOOP]) > 500;
   if (playing) {
     /* The excerpt always uses both 8' stops, whatever the player's current
      * registration, without changing the published stop parameters. */
@@ -633,9 +648,11 @@ void vibe_on_audio(const float *in, float *out_l, float *out_r, int frames)
     }
     demo_phase += (float)n / sr;
     if (demo_index >= BR_DEMO_NOTE_COUNT) {
+      /* Clear any voices still ringing before the first note of the next pass. */
+      br_harpsi_all_off();
       demo_index = 0;
       demo_phase = 0.0f;
-      __atomic_store_n(&demo_playing, 0, __ATOMIC_RELEASE);
+      if (!demo_loop) __atomic_store_n(&demo_playing, 0, __ATOMIC_RELEASE);
     }
   }
 
@@ -730,7 +747,10 @@ void vibe_on_draw(uint16_t *fb)
   } else if (aget(&g_params[P_SAT_TYPE]) > 0) {
     vg_text("DRIVE", 252, 29, VG_SMALL, C_RED, VG_LEFT);
   }
-  if (playing) vg_text("DEMO", 330, 29, VG_SMALL, C_ACC, VG_LEFT);
+  if (playing)
+    vg_text(aget(&g_params[P_DEMO_LOOP]) > 500 ? "LOOP" : "DEMO",
+            330, 29, VG_SMALL, aget(&g_params[P_DEMO_LOOP]) > 500 ? C_AVO : C_ACC,
+            VG_LEFT);
 
   vf_begin();
   for (i = 0; i < 4; i++) {
@@ -859,6 +879,7 @@ void vibe_on_init(float sample_rate)
 
   vibe_editor_control(P_REG, VIBE_CTL_MENU);
   vibe_editor_control(P_BANK, VIBE_CTL_MENU);
+  vibe_editor_control(P_DEMO_LOOP, VIBE_CTL_TOGGLE);
   vibe_editor_control(P_OCTAVE, VIBE_CTL_MENU);
   vibe_editor_control(P_CHOIR_A, VIBE_CTL_TOGGLE);
   vibe_editor_control(P_CHOIR_B, VIBE_CTL_TOGGLE);
@@ -870,6 +891,7 @@ void vibe_on_init(float sample_rate)
 
   vibe_param_help(P_REG, "32 registrations: 1-16 clean (reverb + soundboard), 17-32 with FX. F2/F4 browse; pads select the bank.");
   vibe_param_help(P_BANK, "CLEAN = reverb + soundboard only; FX = the curated rack scene. Pads 1-16 follow this bank.");
+  vibe_param_help(P_DEMO_LOOP, "Repeat the 12-second Dido excerpt while it plays. Turn off for a single pass.");
   vibe_param_help(P_DETUNE, "Cents between choir A and choir B. A little detune gives the harpsichord its shimmer.");
   vibe_param_help(P_BRIGHT, "Karplus-Strong lowpass blend: higher is brighter and pluckier.");
   vibe_param_help(P_DAMPING, "String damping. Lower is a faster natural decay.");

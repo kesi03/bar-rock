@@ -144,7 +144,8 @@
     <div class="row">
       <button id="prev">◀ reg</button><button id="next">reg ▶</button>
       <button id="bank-toggle">clean bank</button>
-      <button id="demo" class="hot">play demo</button><button id="panic">panic</button>
+      <button id="demo" class="hot">play demo</button><button id="loop">loop: on</button>
+      <button id="panic">panic</button>
     </div>
   </section>
   <section class="panel">
@@ -196,6 +197,7 @@
   const ctl = new Map();
   const reg = vibe.byId('registration');
   const bank = vibe.byId('bank');
+  const loop = vibe.byId('demo_loop');
 
   function fmt(p, v) {
     if (p.steps > 1 && p.choices) {
@@ -265,6 +267,7 @@
   $('prev').onclick = () => vibe.send(new Uint8Array([0x25]));
   $('next').onclick = () => vibe.send(new Uint8Array([0x24]));
   $('bank-toggle').onclick = () => vibe.send(new Uint8Array([0x2C]));
+  $('loop').onclick = () => vibe.send(new Uint8Array([0x2D]));
   $('demo').onclick = () => vibe.send(new Uint8Array([0x26]));
   $('panic').onclick = () => vibe.send(new Uint8Array([0x23]));
   $('save').onclick = () => vibe.send(new Uint8Array([0x21]));
@@ -340,6 +343,11 @@
       const on = values[bank.i] > .5;
       $('bank-toggle').textContent = on ? 'FX bank' : 'clean bank';
       $('bank-toggle').classList.toggle('on', on);
+    }
+    if (loop) {
+      const on = values[loop.i] > .5;
+      $('loop').textContent = on ? 'loop: on' : 'loop: off';
+      $('loop').classList.toggle('on', on);
     }
   });
 

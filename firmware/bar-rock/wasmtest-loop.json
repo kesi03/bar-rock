@@ -1,0 +1,13 @@
+{
+  "seconds": 14.2,
+  "float": true,
+  "steps": [
+    {"t": 0.00, "ev": [10, 32, 0, 1]},
+    {"t": 0.10, "ev": [3, 2, 1, 0]},
+    {"t": 1.00, "shot": "01-loop-playing"},
+    {"t": 11.50, "shot": "02-before-wrap"},
+    {"t": 12.60, "shot": "03-after-wrap-still-playing"},
+    {"t": 13.30, "ev": [3, 2, 1, 0]},
+    {"t": 13.60, "shot": "04-loop-stopped"}
+  ]
+}
