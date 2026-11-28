@@ -44,6 +44,10 @@ static br_reverb rev[2];
 static unsigned int age_counter;
 static br_harpsi_ctrl last_ctrl = { 6.0f, 0.82f, 0.85f, 0.60f, 0.28f, 1.00f, 1.0f, 1.0f };
 static float body1, body2;
+/* The combs in the reverb have a DC gain well above one, so without a blocker
+ * the room slowly charges up and pushes the output off centre -- audible as a
+ * speaker rattle, worse when the demo loops.  About 20 Hz at any sample rate. */
+static float dc_l, dc_r, dc_coef;
 static volatile int active_count;
 
 /* A decay that reaches -60 dB in `seconds`, independent of the host rate. */
@@ -115,6 +119,9 @@ void br_harpsi_init(float sr)
 {
   int i;
   br_sr = sr > 1000.0f ? sr : 48000.0f;
+  dc_coef = vd_coef(0.008f, br_sr);
+  dc_l = 0.0f;
+  dc_r = 0.0f;
   natural_decay = decay_for(3.6f);
   damped_decay = decay_for(0.05f);
   panic_decay = decay_for(0.01f);
@@ -150,11 +157,18 @@ static void ks_init(br_string *ks, float freq, float brightness, float damping)
   ks->brightness = brightness;
 
   /* Half-sine shaped noise burst: sin(pi*i/size) is vd_sin(i/(2*size))
-   * because vd_sin() takes phase in turns, not radians. */
-  for (i = 0; i < size; i++) {
-    float n = vd_noise_next(&rng);
-    float shape = vd_sin((float)i / (2.0f * (float)size));
-    ks->buffer[i] = n * shape * 0.65f;
+   * because vd_sin() takes phase in turns, not radians.  Centre the burst so
+   * one pluck cannot inject a DC step into the reverb on its own. */
+  {
+    float mean = 0.0f;
+    for (i = 0; i < size; i++) {
+      float n = vd_noise_next(&rng);
+      float shape = vd_sin((float)i / (2.0f * (float)size));
+      ks->buffer[i] = n * shape * 0.65f;
+      mean += ks->buffer[i];
+    }
+    if (size > 0) mean /= (float)size;
+    for (i = 0; i < size; i++) ks->buffer[i] -= mean;
   }
 }
 
@@ -254,6 +268,17 @@ void br_harpsi_render(float *out_l, float *out_r, int n, const br_harpsi_ctrl *c
       ml += a * (0.5f + 0.5f * spread) + b * (0.5f - 0.5f * spread);
       mr += a * (0.5f - 0.5f * spread) + b * (0.5f + 0.5f * spread);
     }
+
+    /* Strip DC before the soundboard and reverb: the combs would otherwise
+     * integrate it and the looped demo would drift further off centre.
+     * vd_coef() is a retention factor, so the tracked average is
+     * `avg = avg * retain + input * (1 - retain)`. */
+    dc_l = dc_l * dc_coef + ml * (1.0f - dc_coef);
+    dc_r = dc_r * dc_coef + mr * (1.0f - dc_coef);
+    ml -= dc_l;
+    mr -= dc_r;
+    if (vd_absf(dc_l) < 1.0e-7f) dc_l = 0.0f;
+    if (vd_absf(dc_r) < 1.0e-7f) dc_r = 0.0f;
 
     /* Two cheap one-poles stand in for the soundboard. */
     mix = 0.5f * (ml + mr);

@@ -82,6 +82,10 @@ jobs:
           node sdk/tools/wasmtest.mjs sdk/build/bar-rock.wasm \
             firmware/bar-rock/wasmtest-loop.json sdk/build/bar-rock-loop
 
+      - name: Check rendered audio for DC offset
+        shell: bash
+        run: python3 scripts/check_audio.py sdk/build/bar-rock-test/audio.wav sdk/build/bar-rock-fx/audio.wav sdk/build/bar-rock-loop/audio.wav
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

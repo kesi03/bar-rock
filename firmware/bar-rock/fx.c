@@ -72,9 +72,14 @@ static float dl_lp[2], dl_wow, dl_wow_phase;
 /* Smoothed controls: modulation depths and mixes fade in/out without zippers. */
 static br_fx_ctrl sm;
 
+/* Safety DC blocker after the rack: tube asymmetry and the Leslie mic mix can
+ * leave a small offset even when the instrument feeding them is centred. */
+static float out_dc[2], out_dc_coef;
+
+/* k is a vd_coef() retention factor (~1), not a step size. */
 static float approach(float v, float target, float k)
 {
-  v += (target - v) * k;
+  v = target + (v - target) * k;
   if (vd_absf(v) < 1.0e-7f) v = 0.0f;
   return v;
 }
@@ -101,6 +106,7 @@ void br_fx_init(float sample_rate)
 {
   fx_sr = sample_rate > 1000.0f ? sample_rate : 48000.0f;
   fx_ratio = fx_sr / 44100.0f;
+  out_dc_coef = vd_coef(0.008f, fx_sr);
   dl_len = (int)(0.280f * fx_sr + 0.5f);
   if (dl_len < 64) dl_len = 64;
   if (dl_len > BR_FX_DELAY_MAX) dl_len = BR_FX_DELAY_MAX;
@@ -117,6 +123,7 @@ void br_fx_reset(void)
 {
   int ch, i, o;
   sat_dc[0] = sat_dc[1] = 0.0f;
+  out_dc[0] = out_dc[1] = 0.0f;
   for (ch = 0; ch < 2; ch++) {
     for (o = 0; o < 4; o++)
       for (i = 0; i < 512; i++) ph_buf[ch][o][i] = 0.0f;
@@ -149,7 +156,7 @@ void br_fx_reset(void)
   les_horn.phase = les_drum.phase = 0.0f;
   les_horn.hz = les_drum.hz = 0.0f;
   les_horn.target_hz = les_drum.target_hz = 0.0f;
-  les_horn.coef = les_drum.coef = 0.0f;
+  les_horn.coef = les_drum.coef = 1.0f;
   rotary_wet = 0.0f;
   for (i = 0; i < BR_FX_ROTOR_LEN; i++) les_hbuf[i] = les_dbuf[i] = 0.0f;
   sm.sat_type = 0.0f;
@@ -190,7 +197,7 @@ static void les_motor_set(les_rotor *q, float target, float up_s,
 
 static void les_motor_tick(les_rotor *q)
 {
-  q->hz += (q->target_hz - q->hz) * q->coef;
+  q->hz = q->target_hz + (q->hz - q->target_hz) * q->coef;
   if (q->target_hz <= 0.0001f && q->hz < 0.002f) q->hz = 0.0f;
   if (q->hz < 0.0f) q->hz = 0.0f;
   q->phase += q->hz / fx_sr;
@@ -288,6 +295,7 @@ void br_fx_process(float *l, float *r, int n, const br_fx_ctrl *c)
         trem_on || pan_on || rot_on || delay_on;
 
   if (!any) {
+    out_dc[0] = out_dc[1] = 0.0f;
     __atomic_store_n(&rotor_hz100, 0, __ATOMIC_RELEASE);
     return;                           /* straight bypass, exactly unchanged */
   }
@@ -434,12 +442,14 @@ void br_fx_process(float *l, float *r, int n, const br_fx_ctrl *c)
         float mono = (xl + xr) * 0.5f;
         float dry_l = xl, dry_r = xr;
         vd_svf_out sv = vd_svf_tick(&les_split, &les_split_c, mono);
-        float lpn = les_horn_lp + (sv.hp - les_horn_lp) * les_horn_hp_coef;
+        /* vd_coef() returns retention, so a one-pole is
+         * `lp = in + (lp - in) * retain`. */
+        float lpn = sv.hp + (les_horn_lp - sv.hp) * les_horn_hp_coef;
         float horn = sv.hp - lpn;
         float drum;
         float hl, hr, bl, br, wet_l, wet_r;
         les_horn_lp = lpn;
-        les_drum_tone += (sv.lp - les_drum_tone) * les_drum_tone_coef;
+        les_drum_tone = sv.lp + (les_drum_tone - sv.lp) * les_drum_tone_coef;
         drum = les_drum_tone;
         if (rot_drive > 0.0f) horn = vd_tanh(horn * (1.0f + 5.0f * rot_drive));
 
@@ -453,7 +463,10 @@ void br_fx_process(float *l, float *r, int n, const br_fx_ctrl *c)
         br = les_rotor_read(les_dbuf, les_drum.phase, BR_FX_DRUM_R,  BR_FX_MIC_X, rot_depth) * drum_gain;
         wet_l = (hl + bl) * 0.90f + mono * 0.045f;
         wet_r = (hr + br) * 0.90f + mono * 0.045f;
-        rotary_wet += ((rotary_on ? 1.0f : 0.0f) - rotary_wet) * rotary_wet_coef;
+        {
+          float target = rotary_on ? 1.0f : 0.0f;
+          rotary_wet = target + (rotary_wet - target) * rotary_wet_coef;
+        }
         if (rotary_wet > 1.0f) rotary_wet = 1.0f;
         xl = dry_l + (wet_l - dry_l) * rotary_wet;
         xr = dry_r + (wet_r - dry_r) * rotary_wet;
@@ -487,6 +500,12 @@ void br_fx_process(float *l, float *r, int n, const br_fx_ctrl *c)
      * with a little headroom so stacked drive/delay never parks at exactly 1. */
     xl = 0.92f * vd_tanh(xl * 1.06f);
     xr = 0.92f * vd_tanh(xr * 1.06f);
+    out_dc[0] = out_dc[0] * out_dc_coef + xl * (1.0f - out_dc_coef);
+    out_dc[1] = out_dc[1] * out_dc_coef + xr * (1.0f - out_dc_coef);
+    xl -= out_dc[0];
+    xr -= out_dc[1];
+    if (vd_absf(out_dc[0]) < 1.0e-7f) out_dc[0] = 0.0f;
+    if (vd_absf(out_dc[1]) < 1.0e-7f) out_dc[1] = 0.0f;
     if (!(xl > -1.0e20f && xl < 1.0e20f)) xl = 0.0f;
     if (!(xr > -1.0e20f && xr < 1.0e20f)) xr = 0.0f;
     l[i] = xl;

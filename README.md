@@ -11,6 +11,7 @@ A polyphonic harpsichord for [VIBE FM](https://github.com/Vibe-FM-SDK/vibe-fm-sd
 - **String voicing:** brightness (lowpass blend), damping and per-note velocity; natural decay or fast damping on note off.
 - **Soundboard:** two one-pole resonators add a little body without an IR.
 - **Reverb:** four damped combs plus two allpasses per channel, all in fixed arrays; a `Reverb` knob sets the wet amount and each registration carries its own room.
+- **DC-free path:** each pluck is centred, the reverb input is DC-blocked, and the rack has a safety DC blocker at its output, so a long looped demo cannot charge the combs and rattle a speaker.
 - **Colour rack:** solid/tube distortion, a clean-room dual-rotor Leslie, four-stage phaser, two-tap stereo chorus, flanger, tremolo, auto-pan, ring modulation, lo-fi crush and ping-pong/tape echo. The rack is a straight bypass when all amounts are zero.
 - **32 registrations in two banks of 16:**
   - **CLEAN (1–16):** `8 + 8`, `WIDE 8`, `CLOSE 8`, `BRIGHT 8`, `DARK 8`, `SOLO A`, `SOLO B`, `LONG 8`, `SOFT 8`, `PLUCK`, `AIR 8`, `DEEP 8`, `DRY 8`, `WET 8`, `SHIMMER`, `TUTTI`. Only voicing, soundboard and reverb — the effects rack is a true bypass.
@@ -150,9 +151,9 @@ firmware/bar-rock/
 patches/                  (none — registrations live in registrations.h)
 tools/make_icon.py        stdlib-only icon generator
 tools/make_demo.py        stdlib-only MIDI-to-wasmtest/snippet generator
-scripts/                  SDK fetch + Windows build wrapper
+scripts/                  SDK fetch, Windows build wrapper, DC/level render check
 sdk/                      vendored VIBE FM SDK (pinned commit)
-.github/workflows/        CI: build, vibe-check, wasmtest, artifact
+.github/workflows/        CI: build, vibe-check, wasmtest, DC check, artifact
 ```
 
 ## Credits
